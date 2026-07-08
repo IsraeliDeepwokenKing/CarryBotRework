@@ -6,7 +6,7 @@ from discord import app_commands
 
 import database
 
-from config import CARRY_LIMITS
+from config import CARRY_LIMITS, CARRY_ROLES
 
 from cogs.carry import CarryView
 
@@ -17,9 +17,11 @@ from cogs.carry import CarryView
 class Host(commands.Cog):
 
 
-    def __init__(self, bot):
+    def __init__(self,bot):
 
-        self.bot = bot
+        self.bot=bot
+
+
 
 
 
@@ -43,7 +45,7 @@ class Host(commands.Cog):
 
         await interaction.response.send_message(
 
-            "Choose dungeon:",
+            "Choose carry:",
 
             view=DungeonView(),
 
@@ -57,25 +59,26 @@ class Host(commands.Cog):
 
 
 
+
+
 class DungeonSelect(discord.ui.Select):
 
 
     def __init__(self):
 
 
-        options = []
+        options=[]
 
 
-        for dungeon,limit in CARRY_LIMITS.items():
+
+        for dungeon in CARRY_LIMITS:
 
 
             options.append(
 
                 discord.SelectOption(
 
-                    label=dungeon,
-
-                    description=f"Maximum {limit} players"
+                    label=dungeon
 
                 )
 
@@ -104,19 +107,20 @@ class DungeonSelect(discord.ui.Select):
     ):
 
 
-        dungeon = self.values[0]
-
-
-
         await interaction.response.send_message(
 
-            "Select player count:",
+            "Choose slots:",
 
-            view=SlotView(dungeon),
+            view=SlotView(
+
+                self.values[0]
+
+            ),
 
             ephemeral=True
 
         )
+
 
 
 
@@ -149,6 +153,8 @@ class DungeonView(discord.ui.View):
 
 
 
+
+
 class SlotView(discord.ui.View):
 
 
@@ -168,16 +174,13 @@ class SlotView(discord.ui.View):
         )
 
 
-        self.dungeon=dungeon
+        for i in range(
 
+            1,
 
+            CARRY_LIMITS[dungeon]+1
 
-
-        max_players=CARRY_LIMITS[dungeon]
-
-
-
-        for i in range(1,max_players+1):
+        ):
 
 
             self.add_item(
@@ -191,6 +194,7 @@ class SlotView(discord.ui.View):
                 )
 
             )
+
 
 
 
@@ -229,6 +233,8 @@ class SlotButton(discord.ui.Button):
 
 
 
+
+
     async def callback(
 
         self,
@@ -236,6 +242,7 @@ class SlotButton(discord.ui.Button):
         interaction
 
     ):
+
 
 
         carry_id = await database.create_carry(
@@ -249,6 +256,7 @@ class SlotButton(discord.ui.Button):
             self.slots
 
         )
+
 
 
 
@@ -268,19 +276,15 @@ class SlotButton(discord.ui.Button):
 
 
 
-        embed = create_embed(
+        role_name=CARRY_ROLES[self.dungeon]
 
-            interaction.user.name,
 
-            self.dungeon,
 
-            self.slots,
+        role=discord.utils.get(
 
-            [
+            interaction.guild.roles,
 
-                interaction.user.name
-
-            ]
+            name=role_name
 
         )
 
@@ -288,7 +292,50 @@ class SlotButton(discord.ui.Button):
 
 
 
-        msg = await interaction.user.send(
+        ping = role.mention if role else ""
+
+
+
+
+
+
+        embed=discord.Embed(
+
+            title="🔥 Deepwoken Carry",
+
+            description=(
+
+                f"Host: {interaction.user.mention}\n\n"
+
+                f"Dungeon: **{self.dungeon}**\n\n"
+
+                "Players:\n"
+
+                +
+
+                "\n".join(
+
+                    [
+
+                    f"{i}. 🟢 Empty"
+
+                    for i in range(1,self.slots+1)
+
+                    ]
+
+                )
+
+            )
+
+        )
+
+
+
+
+
+
+
+        await interaction.user.send(
 
             embed=embed,
 
@@ -303,23 +350,10 @@ class SlotButton(discord.ui.Button):
 
 
 
-        await database.save_message(
-
-            carry_id,
-
-            msg.id,
-
-            msg.channel.id
-
-        )
-
-
-
-
 
         await interaction.response.send_message(
 
-            "✅ Carry created. Check your DM.",
+            f"✅ Carry created.\n{ping}",
 
             ephemeral=True
 
@@ -331,81 +365,7 @@ class SlotButton(discord.ui.Button):
 
 
 
-
-def create_embed(
-
-    host,
-
-    dungeon,
-
-    slots,
-
-    players
-
-):
-
-
-    embed = discord.Embed(
-
-        title="🔥 Deepwoken Carry",
-
-        color=discord.Color.blue()
-
-    )
-
-
-
-    text = (
-
-        f"**Host:** {host}\n"
-
-        f"**Dungeon:** {dungeon}\n\n"
-
-        "**Players:**\n"
-
-    )
-
-
-
-
-    for i in range(
-
-        1,
-
-        slots+1
-
-    ):
-
-
-        if i <= len(players):
-
-
-            text += f"{i}. {players[i-1]}\n"
-
-
-
-        else:
-
-
-            text += f"{i}. 🟢 Empty\n"
-
-
-
-
-
-    embed.description=text
-
-
-
-    return embed
-
-
-
-
-
-
 async def setup(bot):
-
 
     await bot.add_cog(
 

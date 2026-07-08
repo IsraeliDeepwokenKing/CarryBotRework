@@ -23,8 +23,11 @@ intents.voice_states = True
 
 
 bot = commands.Bot(
+
     command_prefix="!",
+
     intents=intents
+
 )
 
 
@@ -34,12 +37,13 @@ bot = commands.Bot(
 @bot.event
 async def on_ready():
 
-    print("========================")
+    print("===================")
     print(f"ONLINE: {bot.user}")
-    print("========================")
+    print("===================")
 
 
     await database.setup_database()
+
 
 
     try:
@@ -48,7 +52,7 @@ async def on_ready():
 
 
         print(
-            f"Slash commands synced: {len(synced)}"
+            f"Synced {len(synced)} commands"
         )
 
 
@@ -62,7 +66,7 @@ async def on_ready():
     except Exception as e:
 
         print(
-            f"Command sync error: {e}"
+            f"SYNC ERROR: {e}"
         )
 
 
@@ -101,17 +105,15 @@ async def load_extensions():
 
 
             print(
-                f"Loaded: {extension}"
+                f"Loaded {extension}"
             )
 
 
         except Exception as e:
 
-
             print(
-                f"ERROR loading {extension}: {e}"
+                f"Error {extension}: {e}"
             )
-
 
 
 
@@ -121,7 +123,6 @@ async def load_extensions():
 
 
 async def main():
-
 
     keep_alive()
 
