@@ -1,10 +1,12 @@
 import discord
 
-from discord.ext import commands
+from discord.ext import commands, tasks
 
-from datetime import datetime
+import time
 
 import database
+
+from config import VOICE_LOG_SECONDS
 
 
 
@@ -13,81 +15,77 @@ import database
 class VoiceLogs(commands.Cog):
 
 
-    def __init__(self,bot):
+    def __init__(self, bot):
 
-        self.bot=bot
+        self.bot = bot
+
+        self.cleanup_logs.start()
+
+
+
+
+
+
+
+    def cog_unload(self):
+
+        self.cleanup_logs.cancel()
+
+
 
 
 
 
 
     @commands.Cog.listener()
+
     async def on_voice_state_update(
 
         self,
-        member,
-        before,
-        after
+
+        member: discord.Member,
+
+        before: discord.VoiceState,
+
+        after: discord.VoiceState
 
     ):
 
 
-        now=datetime.now().strftime(
-            "%H:%M:%S"
-        )
+        # JOIN
+
+        if before.channel is None and after.channel:
 
 
+            await self.log_voice(
 
-        # JOIN VC
+                member,
 
-        if before.channel is None and after.channel is not None:
+                after.channel,
 
-
-            await database.add_voice_log(
-
-                member.id,
-
-                member.name,
-
-                "JOIN",
-
-                after.channel.id,
-
-                now
+                "JOIN"
 
             )
 
 
-            print(
-                f"{member} joined {after.channel.name}"
-            )
 
 
 
 
 
-        # LEAVE VC
+        # LEAVE
 
-        elif before.channel is not None and after.channel is None:
-
-
-            await database.add_voice_log(
-
-                member.id,
-
-                member.name,
-
-                "LEAVE",
-
-                before.channel.id,
-
-                now
-
-            )
+        elif before.channel and after.channel is None:
 
 
-            print(
-                f"{member} left {before.channel.name}"
+            await self.log_voice(
+
+                member,
+
+                before.channel,
+
+                "LEAVE"
+
             )
 
 
@@ -95,39 +93,146 @@ class VoiceLogs(commands.Cog):
 
 
 
-        # MOVE VC
+
+        # MOVE
 
         elif before.channel != after.channel:
 
 
-            await database.add_voice_log(
+            if before.channel:
 
-                member.id,
 
-                member.name,
+                await self.log_voice(
 
-                "MOVE_FROM",
+                    member,
 
-                before.channel.id,
+                    before.channel,
 
-                now
+                    "LEAVE"
+
+                )
+
+
+
+            if after.channel:
+
+
+                await self.log_voice(
+
+                    member,
+
+                    after.channel,
+
+                    "JOIN"
+
+                )
+
+
+
+
+
+
+
+
+
+    async def log_voice(
+
+        self,
+
+        member,
+
+        channel,
+
+        action
+
+    ):
+
+
+        # traži carry sa ovim VC ID-em
+
+
+        db = await database.get_db()
+
+
+        cursor = await db.execute(
+
+            """
+
+            SELECT carry_id
+
+            FROM carries
+
+            WHERE voice_id=?
+
+            """,
+
+            (
+
+                channel.id,
 
             )
 
+        )
 
-            await database.add_voice_log(
 
-                member.id,
+        carry = await cursor.fetchone()
 
-                member.name,
 
-                "MOVE_TO",
+        await db.close()
 
-                after.channel.id,
 
-                now
 
-            )
+
+
+        if not carry:
+
+            return
+
+
+
+
+
+        await database.add_voice_log(
+
+            carry[0],
+
+            member.id,
+
+            action,
+
+            int(time.time())
+
+        )
+
+
+
+
+
+
+
+
+
+    @tasks.loop(
+
+        seconds=60
+
+    )
+
+    async def cleanup_logs(self):
+
+
+        cutoff = int(time.time()) - VOICE_LOG_SECONDS
+
+
+        await database.clean_voice_logs(
+
+            cutoff
+
+        )
+
+
+
+
 
 
 
@@ -136,5 +241,7 @@ class VoiceLogs(commands.Cog):
 async def setup(bot):
 
     await bot.add_cog(
+
         VoiceLogs(bot)
+
     )

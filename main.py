@@ -1,11 +1,10 @@
-import discord
-from discord.ext import commands
-
 import os
 import asyncio
 
-import database
+import discord
+from discord.ext import commands
 
+import database
 from keep_alive import keep_alive
 
 
@@ -14,107 +13,101 @@ TOKEN = os.getenv("TOKEN")
 
 
 
-intents = discord.Intents.default()
-
-intents.members = True
-intents.message_content = True
-intents.voice_states = True
 
 
+class CarryBot(commands.Bot):
 
-bot = commands.Bot(
+    def __init__(self):
 
-    command_prefix="!",
+        intents = discord.Intents.default()
 
-    intents=intents
-
-)
-
-
-
+        intents.members = True
+        intents.message_content = True
+        intents.voice_states = True
 
 
-@bot.event
-async def on_ready():
-
-    print("===================")
-    print(f"ONLINE: {bot.user}")
-    print("===================")
-
-
-    await database.setup_database()
-
-
-
-    try:
-
-        synced = await bot.tree.sync()
-
-
-        print(
-            f"Synced {len(synced)} commands"
-        )
-
-
-        for command in synced:
-
-            print(
-                f"/{command.name}"
-            )
-
-
-    except Exception as e:
-
-        print(
-            f"SYNC ERROR: {e}"
+        super().__init__(
+            command_prefix="!",
+            intents=intents
         )
 
 
 
 
 
+    async def setup_hook(self):
+
+        await database.setup_database()
 
 
-async def load_extensions():
+        extensions = [
+
+            "cogs.setup",
+            "cogs.host",
+            "cogs.carry",
+            "cogs.voice_logs",
+            "cogs.incidents",
+            "cogs.blacklist",
+            "cogs.cleanup"
+
+        ]
 
 
-    extensions = [
+        for extension in extensions:
 
-        "cogs.host",
+            try:
 
-        "cogs.carry",
+                await self.load_extension(extension)
 
-        "cogs.voice_logs",
-
-        "cogs.incidents",
-
-        "cogs.stats"
-
-    ]
+                print(
+                    f"Loaded: {extension}"
+                )
 
 
+            except Exception as error:
 
-    for extension in extensions:
-
-
-        try:
-
-            await bot.load_extension(
-                extension
-            )
+                print(
+                    f"Failed loading {extension}: {error}"
+                )
 
 
-            print(
-                f"Loaded {extension}"
-            )
+
+        synced = await self.tree.sync()
 
 
-        except Exception as e:
+        print(
+            f"Synced {len(synced)} slash commands"
+        )
 
-            print(
-                f"Error {extension}: {e}"
-            )
 
+
+
+
+
+
+    async def on_ready(self):
+
+        print("======================")
+
+        print(
+            f"Logged in as {self.user}"
+        )
+
+        print(
+            f"Servers: {len(self.guilds)}"
+        )
+
+        print("======================")
+
+
+
+
+
+
+
+
+
+bot = CarryBot()
 
 
 
@@ -124,10 +117,17 @@ async def load_extensions():
 
 async def main():
 
+    if not TOKEN:
+
+        print(
+            "ERROR: TOKEN environment variable missing"
+        )
+
+        return
+
+
+
     keep_alive()
-
-
-    await load_extensions()
 
 
     await bot.start(
@@ -139,4 +139,10 @@ async def main():
 
 
 
-asyncio.run(main())
+
+
+if __name__ == "__main__":
+
+    asyncio.run(
+        main()
+    )

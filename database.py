@@ -1,605 +1,856 @@
 import aiosqlite
-from datetime import datetime
+
+from config import DATABASE_FILE
 
 
-DATABASE = "carry.db"
+
+
+
+async def get_db():
+
+    return await aiosqlite.connect(
+        DATABASE_FILE
+    )
+
+
 
 
 
 async def setup_database():
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS carries(
+    await db.executescript("""
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS settings (
 
-            host_id INTEGER,
-            host_name TEXT,
+        guild_id INTEGER PRIMARY KEY,
 
-            dungeon TEXT,
+        category_id INTEGER,
 
-            slots INTEGER,
+        carry_pings_id INTEGER,
 
-            status TEXT DEFAULT 'waiting',
+        hoster_cmds_id INTEGER,
 
-            role_id INTEGER DEFAULT 0,
+        incident_reports_id INTEGER
 
-            vc_id INTEGER DEFAULT 0,
+    );
 
-            lobby_message_id INTEGER DEFAULT 0,
 
-            created TEXT
 
-        )
-        """)
 
 
+    CREATE TABLE IF NOT EXISTS carries (
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS players(
+        carry_id TEXT PRIMARY KEY,
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id INTEGER,
 
-            carry_id INTEGER,
+        host_id INTEGER,
 
-            user_id INTEGER,
+        dungeon TEXT,
 
-            username TEXT,
+        slots INTEGER,
 
-            position INTEGER
+        rules TEXT,
 
-        )
-        """)
+        message_id INTEGER,
 
+        voice_id INTEGER,
 
+        role_id INTEGER,
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS voice_logs(
+        active INTEGER DEFAULT 1
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    );
 
-            user_id INTEGER,
 
-            username TEXT,
 
-            event TEXT,
 
-            channel_id INTEGER,
 
-            time TEXT
+    CREATE TABLE IF NOT EXISTS carry_players (
 
-        )
-        """)
+        carry_id TEXT,
 
+        user_id INTEGER,
 
+        username TEXT,
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS incidents(
+        joined_at INTEGER
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    );
 
-            carry_id INTEGER,
 
-            host_id INTEGER,
 
-            username TEXT,
 
-            reason TEXT,
 
-            logs TEXT,
+    CREATE TABLE IF NOT EXISTS voice_logs (
 
-            created TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        )
-        """)
+        carry_id TEXT,
 
+        user_id INTEGER,
 
+        action TEXT,
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS carry_messages(
+        timestamp INTEGER
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    );
 
-            carry_id INTEGER,
 
-            message_id INTEGER,
 
-            channel_id INTEGER
 
-        )
-        """)
 
+    CREATE TABLE IF NOT EXISTS blacklist (
 
+        user_id INTEGER PRIMARY KEY,
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS statistics(
+        reason TEXT,
 
-            user_id INTEGER PRIMARY KEY,
+        moderator_id INTEGER,
 
-            username TEXT,
+        created_at INTEGER
 
-            completed INTEGER DEFAULT 0,
+    );
 
-            hosted INTEGER DEFAULT 0
 
-        )
-        """)
 
 
 
-        await db.commit()
+    CREATE TABLE IF NOT EXISTS incidents (
 
+        message_id INTEGER PRIMARY KEY,
 
+        channel_id INTEGER,
 
+        delete_time INTEGER
 
+    );
 
+    """)
 
-# ======================
-# CARRY
-# ======================
 
+    await db.commit()
 
-async def create_carry(
-    host_id,
-    host_name,
-    dungeon,
-    slots
+    await db.close()
+
+
+
+
+
+
+
+# =========================
+# SETTINGS
+# =========================
+
+
+async def save_settings(
+
+    guild_id,
+
+    category_id,
+
+    carry_pings_id,
+
+    hoster_cmds_id,
+
+    incident_reports_id
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        cur = await db.execute(
+    await db.execute(
+
         """
-        INSERT INTO carries
 
-        (
-        host_id,
-        host_name,
-        dungeon,
-        slots,
-        created
+        INSERT OR REPLACE INTO settings
 
-        )
-
-        VALUES(?,?,?,?,?)
+        VALUES (?, ?, ?, ?, ?)
 
         """,
 
         (
-        host_id,
-        host_name,
-        dungeon,
-        slots,
-        datetime.now().isoformat()
 
-        ))
+            guild_id,
 
+            category_id,
 
-        await db.commit()
+            carry_pings_id,
 
+            hoster_cmds_id,
 
-        return cur.lastrowid
+            incident_reports_id
 
+        )
 
-
+    )
 
 
-async def get_carry(
-    carry_id
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+async def get_settings(guild_id):
+
+    db = await get_db()
+
+
+    cursor = await db.execute(
+
+        """
+
+        SELECT *
+
+        FROM settings
+
+        WHERE guild_id=?
+
+        """,
+
+        (guild_id,)
+
+    )
+
+
+    result = await cursor.fetchone()
+
+
+    await db.close()
+
+
+    return result
+
+
+
+
+
+
+
+# =========================
+# CARRY
+# =========================
+
+
+async def create_carry(
+
+    carry_id,
+
+    guild_id,
+
+    host_id,
+
+    dungeon,
+
+    slots,
+
+    rules
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        cur = await db.execute(
+    await db.execute(
+
         """
+
+        INSERT INTO carries
+
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 1)
+
+        """,
+
+        (
+
+            carry_id,
+
+            guild_id,
+
+            host_id,
+
+            dungeon,
+
+            slots,
+
+            rules
+
+        )
+
+    )
+
+
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+async def get_carry(carry_id):
+
+    db = await get_db()
+
+
+    cursor = await db.execute(
+
+        """
+
         SELECT *
 
         FROM carries
 
-        WHERE id=?
+        WHERE carry_id=?
 
         """,
 
-        (
-        carry_id,
-        ))
+        (carry_id,)
+
+    )
 
 
-        return await cur.fetchone()
+    result = await cursor.fetchone()
+
+
+    await db.close()
+
+
+    return result
 
 
 
 
 
-async def update_carry(
+
+
+async def update_carry_resources(
+
     carry_id,
-    role_id,
-    vc_id
+
+    message_id=None,
+
+    voice_id=None,
+
+    role_id=None
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        await db.execute(
+    await db.execute(
+
         """
+
         UPDATE carries
 
         SET
 
-        role_id=?,
-        vc_id=?,
-        status='running'
+        message_id = COALESCE(?, message_id),
 
-        WHERE id=?
+        voice_id = COALESCE(?, voice_id),
 
-        """,
+        role_id = COALESCE(?, role_id)
 
-        (
-        role_id,
-        vc_id,
-        carry_id
-
-        ))
-
-
-        await db.commit()
-
-
-
-
-
-async def end_carry(
-    carry_id
-):
-
-    async with aiosqlite.connect(DATABASE) as db:
-
-
-        await db.execute(
-        """
-        UPDATE carries
-
-        SET status='ended'
-
-        WHERE id=?
+        WHERE carry_id=?
 
         """,
 
         (
-        carry_id,
-        ))
+
+            message_id,
+
+            voice_id,
+
+            role_id,
+
+            carry_id
+
+        )
+
+    )
 
 
-        await db.commit()
+    await db.commit()
+
+    await db.close()
 
 
 
 
 
-# ======================
+
+
+async def delete_carry(carry_id):
+
+
+    db = await get_db()
+
+
+    await db.execute(
+
+        "DELETE FROM carry_players WHERE carry_id=?",
+
+        (carry_id,)
+
+    )
+
+
+    await db.execute(
+
+        "DELETE FROM voice_logs WHERE carry_id=?",
+
+        (carry_id,)
+
+    )
+
+
+    await db.execute(
+
+        "DELETE FROM carries WHERE carry_id=?",
+
+        (carry_id,)
+
+    )
+
+
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+# =========================
 # PLAYERS
-# ======================
+# =========================
 
 
 async def add_player(
+
     carry_id,
+
     user_id,
-    username,
-    position
+
+    username
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        await db.execute(
+    await db.execute(
+
         """
-        INSERT INTO players
+
+        INSERT INTO carry_players
+
+        VALUES (?, ?, ?, ?)
+
+        """,
 
         (
-        carry_id,
-        user_id,
-        username,
-        position
+
+            carry_id,
+
+            user_id,
+
+            username,
+
+            0
 
         )
 
-        VALUES(?,?,?,?)
-
-        """,
-
-        (
-        carry_id,
-        user_id,
-        username,
-        position
-
-        ))
+    )
 
 
-        await db.commit()
+    await db.commit()
+
+    await db.close()
 
 
 
 
 
 
-async def get_players(
-    carry_id
-):
 
-    async with aiosqlite.connect(DATABASE) as db:
+async def remove_player(
 
-
-        cur = await db.execute(
-        """
-        SELECT username
-
-        FROM players
-
-        WHERE carry_id=?
-
-        ORDER BY position
-
-        """,
-
-        (
-        carry_id,
-        ))
-
-
-        return await cur.fetchall()
-
-
-
-
-
-async def player_exists(
     carry_id,
+
     user_id
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        cur = await db.execute(
+    await db.execute(
+
         """
-        SELECT *
 
-        FROM players
+        DELETE FROM carry_players
 
-        WHERE carry_id=?
-        AND user_id=?
+        WHERE carry_id=? AND user_id=?
 
         """,
 
         (
-        carry_id,
-        user_id
 
-        ))
+            carry_id,
 
+            user_id
 
-        return await cur.fetchone()
+        )
 
-
-
+    )
 
 
-async def player_count(
-    carry_id
-):
+    await db.commit()
 
-    async with aiosqlite.connect(DATABASE) as db:
+    await db.close()
 
 
-        cur = await db.execute(
+
+
+
+
+
+async def get_players(carry_id):
+
+    db = await get_db()
+
+
+    cursor = await db.execute(
+
         """
-        SELECT COUNT(*)
 
-        FROM players
+        SELECT user_id, username
+
+        FROM carry_players
 
         WHERE carry_id=?
 
         """,
 
-        (
-        carry_id,
-        ))
+        (carry_id,)
+
+    )
 
 
-        result = await cur.fetchone()
+    result = await cursor.fetchall()
 
 
-        return result[0]
+    await db.close()
+
+
+    return result
 
 
 
 
 
 
-# ======================
+
+# =========================
 # VOICE LOGS
-# ======================
+# =========================
 
 
 async def add_voice_log(
+
+    carry_id,
+
     user_id,
-    username,
-    event,
-    channel_id
+
+    action,
+
+    timestamp
+
 ):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    db = await get_db()
 
 
-        await db.execute(
+    await db.execute(
+
         """
+
         INSERT INTO voice_logs
 
-        VALUES(NULL,?,?,?,?,?)
+        VALUES (NULL, ?, ?, ?, ?)
 
         """,
 
         (
-        user_id,
-        username,
-        event,
-        channel_id,
-        datetime.now().strftime("%H:%M:%S")
 
-        ))
+            carry_id,
 
+            user_id,
 
-        await db.commit()
+            action,
 
-
-
-
-
-
-async def get_voice_logs(
-    channel_id
-):
-
-    async with aiosqlite.connect(DATABASE) as db:
-
-
-        cur = await db.execute(
-        """
-        SELECT username,event,time
-
-        FROM voice_logs
-
-        WHERE channel_id=?
-
-        ORDER BY id DESC
-
-        LIMIT 50
-
-        """,
-
-        (
-        channel_id,
-        ))
-
-
-        return await cur.fetchall()
-
-
-
-
-
-
-# ======================
-# MESSAGES
-# ======================
-
-
-async def save_message(
-    carry_id,
-    message_id,
-    channel_id
-):
-
-    async with aiosqlite.connect(DATABASE) as db:
-
-
-        await db.execute(
-        """
-        INSERT INTO carry_messages
-
-        VALUES(NULL,?,?,?)
-
-        """,
-
-        (
-        carry_id,
-        message_id,
-        channel_id
-
-        ))
-
-
-        await db.commit()
-
-
-
-
-
-async def get_messages(
-    carry_id
-):
-
-    async with aiosqlite.connect(DATABASE) as db:
-
-
-        cur = await db.execute(
-        """
-        SELECT message_id,channel_id
-
-        FROM carry_messages
-
-        WHERE carry_id=?
-
-        """,
-
-        (
-        carry_id,
-        ))
-
-
-        return await cur.fetchall()
-
-
-
-
-
-# ======================
-# STATS
-# ======================
-
-
-async def add_stat(
-    user_id,
-    username
-):
-
-    async with aiosqlite.connect(DATABASE) as db:
-
-
-        await db.execute(
-        """
-        INSERT INTO statistics
-
-        (
-        user_id,
-        username,
-        completed,
-        hosted
+            timestamp
 
         )
 
-        VALUES(?,?,1,1)
+    )
 
-        ON CONFLICT(user_id)
 
-        DO UPDATE SET
+    await db.commit()
 
-        completed=completed+1,
-        hosted=hosted+1
+    await db.close()
+
+
+
+
+
+
+
+async def get_voice_logs(carry_id):
+
+    db = await get_db()
+
+
+    cursor = await db.execute(
+
+        """
+
+        SELECT *
+
+        FROM voice_logs
+
+        WHERE carry_id=?
+
+        ORDER BY timestamp ASC
+
+        """,
+
+        (carry_id,)
+
+    )
+
+
+    result = await cursor.fetchall()
+
+
+    await db.close()
+
+
+    return result
+
+
+
+
+
+
+
+async def clean_voice_logs(timestamp):
+
+    db = await get_db()
+
+
+    await db.execute(
+
+        """
+
+        DELETE FROM voice_logs
+
+        WHERE timestamp < ?
+
+        """,
+
+        (timestamp,)
+
+    )
+
+
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+# =========================
+# BLACKLIST
+# =========================
+
+
+async def add_blacklist(
+
+    user_id,
+
+    reason,
+
+    moderator_id,
+
+    created_at
+
+):
+
+    db = await get_db()
+
+
+    await db.execute(
+
+        """
+
+        INSERT OR REPLACE INTO blacklist
+
+        VALUES (?, ?, ?, ?)
 
         """,
 
         (
-        user_id,
-        username
 
-        ))
+            user_id,
+
+            reason,
+
+            moderator_id,
+
+            created_at
+
+        )
+
+    )
 
 
-        await db.commit()
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+async def remove_blacklist(user_id):
+
+    db = await get_db()
+
+
+    await db.execute(
+
+        """
+
+        DELETE FROM blacklist
+
+        WHERE user_id=?
+
+        """,
+
+        (user_id,)
+
+    )
+
+
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+async def is_blacklisted(user_id):
+
+    db = await get_db()
+
+
+    cursor = await db.execute(
+
+        """
+
+        SELECT user_id
+
+        FROM blacklist
+
+        WHERE user_id=?
+
+        """,
+
+        (user_id,)
+
+    )
+
+
+    result = await cursor.fetchone()
+
+
+    await db.close()
+
+
+    return result is not None
+
+
+
+
+
+
+
+# =========================
+# INCIDENTS
+# =========================
+
+
+async def create_incident(
+
+    message_id,
+
+    channel_id,
+
+    delete_time
+
+):
+
+    db = await get_db()
+
+
+    await db.execute(
+
+        """
+
+        INSERT OR REPLACE INTO incidents
+
+        VALUES (?, ?, ?)
+
+        """,
+
+        (
+
+            message_id,
+
+            channel_id,
+
+            delete_time
+
+        )
+
+    )
+
+
+    await db.commit()
+
+    await db.close()

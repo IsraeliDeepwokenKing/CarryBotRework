@@ -5,32 +5,25 @@ from threading import Thread
 app = Flask(__name__)
 
 
-
 @app.route("/")
 def home():
-
-    return "Deepwoken Carry Bot Online"
-
+    return "Carry bot online"
 
 
 
 def run():
 
     app.run(
-
         host="0.0.0.0",
-
         port=8080
-
     )
-
 
 
 
 def keep_alive():
 
-    thread = Thread(
+    t = Thread(
         target=run
     )
 
-    thread.start()
+    t.start()

@@ -2,9 +2,15 @@ import discord
 
 from discord.ext import commands
 
+import asyncio
+import time
+
 import database
 
-from config import REPORT_CHANNEL_ID
+from config import (
+    CHANNELS,
+    INCIDENT_DELETE_TIME
+)
 
 
 
@@ -13,14 +19,7 @@ from config import REPORT_CHANNEL_ID
 class IncidentModal(discord.ui.Modal):
 
 
-    def __init__(
-
-        self,
-
-        carry_id
-
-    ):
-
+    def __init__(self, carry_id):
 
         super().__init__(
 
@@ -28,27 +27,56 @@ class IncidentModal(discord.ui.Modal):
 
         )
 
-
         self.carry_id = carry_id
 
 
 
-        self.reason = discord.ui.TextInput(
 
-            label="Describe the incident",
+
+        self.users = discord.ui.TextInput(
+
+            label="User ID(s)",
+
+            placeholder="Example: 123456789, 987654321",
+
+            required=True
+
+        )
+
+
+
+        self.clip = discord.ui.TextInput(
+
+            label="Clip Link",
+
+            placeholder="Paste clip URL",
+
+            required=True
+
+        )
+
+
+
+        self.context = discord.ui.TextInput(
+
+            label="What happened?",
+
+            placeholder="Explain the incident",
 
             style=discord.TextStyle.paragraph,
 
-            placeholder="Explain what happened..."
+            required=True
 
         )
 
 
-        self.add_item(
 
-            self.reason
+        self.add_item(self.users)
 
-        )
+        self.add_item(self.clip)
+
+        self.add_item(self.context)
+
 
 
 
@@ -71,13 +99,12 @@ class IncidentModal(discord.ui.Modal):
         )
 
 
-
         if not carry:
 
 
             await interaction.response.send_message(
 
-                "Carry not found.",
+                "Carry no longer exists.",
 
                 ephemeral=True
 
@@ -89,9 +116,17 @@ class IncidentModal(discord.ui.Modal):
 
 
 
-        logs = await database.get_voice_logs(
+        players = await database.get_players(
 
-            carry[7]
+            self.carry_id
+
+        )
+
+
+
+        voice = await database.get_voice_logs(
+
+            self.carry_id
 
         )
 
@@ -99,37 +134,145 @@ class IncidentModal(discord.ui.Modal):
 
 
 
-        log_text = ""
+
+
+        player_list = "\n".join(
+
+            [
+
+                f"<@{x[0]}>"
+
+                for x in players
+
+            ]
+
+        )
 
 
 
-        for log in logs:
+        if not player_list:
 
-
-            log_text += (
-
-                f"{log[0]} - "
-
-                f"{log[1]} "
-
-                f"({log[2]})\n"
-
-            )
+            player_list = "None"
 
 
 
 
-        await database.add_incident(
 
-            self.carry_id,
 
-            interaction.user.id,
 
-            interaction.user.name,
+        voice_list = "\n".join(
 
-            self.reason.value,
+            [
 
-            log_text
+                f"<@{x[2]}> - {x[3]}"
+
+                for x in voice
+
+            ]
+
+        )
+
+
+
+        if not voice_list:
+
+            voice_list = "No recent voice activity"
+
+
+
+
+
+
+
+        embed = discord.Embed(
+
+            title="Carry Incident Report",
+
+            color=discord.Color.red()
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Carry ID",
+
+            value=f"`{self.carry_id}`",
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Host",
+
+            value=f"<@{carry[2]}>",
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Reported User ID(s)",
+
+            value=self.users.value,
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Clip",
+
+            value=self.clip.value,
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Context",
+
+            value=self.context.value,
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Carry Players",
+
+            value=player_list[:1024],
+
+            inline=False
+
+        )
+
+
+
+        embed.add_field(
+
+            name="Voice Logs",
+
+            value=voice_list[:1024],
+
+            inline=False
 
         )
 
@@ -137,9 +280,11 @@ class IncidentModal(discord.ui.Modal):
 
 
 
-        channel = interaction.guild.get_channel(
+        channel = discord.utils.get(
 
-            REPORT_CHANNEL_ID
+            interaction.guild.text_channels,
+
+            name=CHANNELS["incident_reports"]
 
         )
 
@@ -147,73 +292,46 @@ class IncidentModal(discord.ui.Modal):
 
 
 
-        if channel:
+        if channel is None:
 
 
-            embed = discord.Embed(
+            await interaction.response.send_message(
 
-                title="🚨 Carry Incident Report",
+                "Incident channel missing. Run /setup.",
 
-                color=discord.Color.red()
-
-            )
-
-
-
-            embed.add_field(
-
-                name="Host/Reporter",
-
-                value=interaction.user.mention,
-
-                inline=False
+                ephemeral=True
 
             )
 
-
-
-            embed.add_field(
-
-                name="Carry",
-
-                value=f"{carry[3]} #{self.carry_id}",
-
-                inline=False
-
-            )
+            return
 
 
 
-            embed.add_field(
-
-                name="Reason",
-
-                value=self.reason.value,
-
-                inline=False
-
-            )
 
 
 
-            embed.add_field(
 
-                name="Voice Logs",
+        message = await channel.send(
 
-                value=log_text[:1000] or "No logs",
+            embed=embed,
 
-                inline=False
+            view=ResolveView()
 
-            )
-
+        )
 
 
-            await channel.send(
 
-                embed=embed
 
-            )
 
+        await database.create_incident(
+
+            message.id,
+
+            channel.id,
+
+            int(time.time())
+
+        )
 
 
 
@@ -221,13 +339,104 @@ class IncidentModal(discord.ui.Modal):
 
         await interaction.response.send_message(
 
-            "✅ Incident report sent.",
+            "Incident submitted.",
 
             ephemeral=True
 
         )
 
 
+
+
+
+
+
+
+
+class ResolveView(discord.ui.View):
+
+
+    def __init__(self):
+
+        super().__init__(
+
+            timeout=None
+
+        )
+
+
+
+
+
+
+
+    @discord.ui.button(
+
+        label="Resolve",
+
+        style=discord.ButtonStyle.success,
+
+        custom_id="resolve_incident"
+
+    )
+
+    async def resolve(
+
+        self,
+
+        interaction: discord.Interaction,
+
+        button: discord.ui.Button
+
+    ):
+
+
+        if not interaction.user.guild_permissions.manage_messages:
+
+
+            await interaction.response.send_message(
+
+                "You need moderator permissions.",
+
+                ephemeral=True
+
+            )
+
+            return
+
+
+
+
+
+        await interaction.response.send_message(
+
+            "Resolved. Deleting in 1 hour.",
+
+            ephemeral=True
+
+        )
+
+
+
+
+
+        await asyncio.sleep(
+
+            INCIDENT_DELETE_TIME
+
+        )
+
+
+
+
+
+        try:
+
+            await interaction.message.delete()
+
+        except:
+
+            pass
 
 
 
@@ -246,7 +455,7 @@ class Incidents(commands.Cog):
 
     ):
 
-        self.bot=bot
+        self.bot = bot
 
 
 
@@ -255,7 +464,6 @@ class Incidents(commands.Cog):
 
 
 async def setup(bot):
-
 
     await bot.add_cog(
 

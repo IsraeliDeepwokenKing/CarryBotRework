@@ -1,40 +1,89 @@
 import discord
-
 from discord.ext import commands
-
 from discord import app_commands
+
+import random
+import string
 
 import database
 
-from config import CARRY_LIMITS, CARRY_ROLES
-
-from cogs.carry import CarryView
-
-
-
-
-
-class Host(commands.Cog):
-
-
-    def __init__(self,bot):
-
-        self.bot=bot
+from config import (
+    CARRY_LIMITS,
+    HOSTER_ROLES,
+    CARRY_ROLES,
+    CHANNELS,
+    CARRY_ID_LENGTH
+)
 
 
 
 
 
+def generate_carry_id():
 
+    chars = string.ascii_uppercase + string.digits
 
-    @app_commands.command(
-
-        name="host",
-
-        description="Create a Deepwoken carry"
-
+    return "".join(
+        random.choice(chars)
+        for _ in range(CARRY_ID_LENGTH)
     )
-    async def host(
+
+
+
+
+
+
+
+class HostModal(discord.ui.Modal):
+
+
+    def __init__(self, dungeon):
+
+        super().__init__(
+            title=f"{dungeon} Carry"
+        )
+
+
+        self.dungeon = dungeon
+
+
+
+        self.slots = discord.ui.TextInput(
+
+            label="Player amount",
+
+            placeholder=f"1-{CARRY_LIMITS[dungeon]}",
+
+            max_length=2
+
+        )
+
+
+        self.rules = discord.ui.TextInput(
+
+            label="Rules",
+
+            placeholder="Example: No freshies, Take Enforcers",
+
+            required=False,
+
+            style=discord.TextStyle.paragraph
+
+        )
+
+
+
+        self.add_item(self.slots)
+
+        self.add_item(self.rules)
+
+
+
+
+
+
+
+    async def on_submit(
 
         self,
 
@@ -43,158 +92,54 @@ class Host(commands.Cog):
     ):
 
 
-        await interaction.response.send_message(
+        try:
 
-            "Choose carry:",
+            slots = int(
+                self.slots.value
+            )
 
-            view=DungeonView(),
+        except:
 
-            ephemeral=True
+            await interaction.response.send_message(
 
-        )
+                "Invalid number.",
 
-
-
-
-
-
-
-
-
-class DungeonSelect(discord.ui.Select):
-
-
-    def __init__(self):
-
-
-        options=[]
-
-
-
-        for dungeon in CARRY_LIMITS:
-
-
-            options.append(
-
-                discord.SelectOption(
-
-                    label=dungeon
-
-                )
+                ephemeral=True
 
             )
 
+            return
 
 
-        super().__init__(
 
-            placeholder="Select dungeon",
 
-            options=options
 
-        )
+        if slots > CARRY_LIMITS[self.dungeon] or slots < 1:
 
 
+            await interaction.response.send_message(
 
+                "Invalid player amount.",
 
-
-    async def callback(
-
-        self,
-
-        interaction
-
-    ):
-
-
-        await interaction.response.send_message(
-
-            "Choose slots:",
-
-            view=SlotView(
-
-                self.values[0]
-
-            ),
-
-            ephemeral=True
-
-        )
-
-
-
-
-
-
-
-
-
-class DungeonView(discord.ui.View):
-
-
-    def __init__(self):
-
-        super().__init__(
-
-            timeout=60
-
-        )
-
-
-        self.add_item(
-
-            DungeonSelect()
-
-        )
-
-
-
-
-
-
-
-
-
-class SlotView(discord.ui.View):
-
-
-    def __init__(
-
-        self,
-
-        dungeon
-
-    ):
-
-
-        super().__init__(
-
-            timeout=60
-
-        )
-
-
-        for i in range(
-
-            1,
-
-            CARRY_LIMITS[dungeon]+1
-
-        ):
-
-
-            self.add_item(
-
-                SlotButton(
-
-                    dungeon,
-
-                    i
-
-                )
+                ephemeral=True
 
             )
 
+            return
+
+
+
+
+
+        carry_id = generate_carry_id()
+
+
+        rules = self.rules.value.strip()
+
+
+        if rules == "":
+
+            rules = "None"
 
 
 
@@ -202,60 +147,136 @@ class SlotView(discord.ui.View):
 
 
 
-class SlotButton(discord.ui.Button):
+        await database.create_carry(
 
+            carry_id,
 
-    def __init__(
-
-        self,
-
-        dungeon,
-
-        slots
-
-    ):
-
-
-        super().__init__(
-
-            label=str(slots),
-
-            style=discord.ButtonStyle.primary
-
-        )
-
-
-        self.dungeon=dungeon
-
-        self.slots=slots
-
-
-
-
-
-
-
-    async def callback(
-
-        self,
-
-        interaction
-
-    ):
-
-
-
-        carry_id = await database.create_carry(
+            interaction.guild.id,
 
             interaction.user.id,
 
-            interaction.user.name,
-
             self.dungeon,
 
-            self.slots
+            slots,
+
+            rules
 
         )
+
+
+
+
+
+
+
+        channel = discord.utils.get(
+
+            interaction.guild.text_channels,
+
+            id=(await database.get_settings(
+
+                interaction.guild.id
+
+            ))[2]
+
+        )
+
+
+
+
+
+        ping_role = discord.utils.get(
+
+            interaction.guild.roles,
+
+            name=CARRY_ROLES[self.dungeon]
+
+        )
+
+
+
+
+
+
+
+        embed = discord.Embed(
+
+            title=f"{self.dungeon} Carry",
+
+            color=discord.Color.blue()
+
+        )
+
+
+        embed.add_field(
+
+            name="Host",
+
+            value=interaction.user.mention,
+
+            inline=False
+
+        )
+
+
+        embed.add_field(
+
+            name="Carry ID",
+
+            value=f"`{carry_id}`",
+
+            inline=False
+
+        )
+
+
+        embed.add_field(
+
+            name="Rules",
+
+            value=rules,
+
+            inline=False
+
+        )
+
+
+        embed.add_field(
+
+            name=f"Players (1/{slots})",
+
+            value=f"1. {interaction.user.mention}",
+
+            inline=False
+
+        )
+
+
+
+
+
+        msg = await channel.send(
+
+            content=ping_role.mention,
+
+            embed=embed,
+
+            view=CarryJoinView(carry_id)
+
+        )
+
+
+
+
+
+        await database.update_carry_resources(
+
+            carry_id,
+
+            message_id=msg.id
+
+        )
+
 
 
 
@@ -266,9 +287,7 @@ class SlotButton(discord.ui.Button):
 
             interaction.user.id,
 
-            interaction.user.name,
-
-            1
+            str(interaction.user)
 
         )
 
@@ -276,76 +295,24 @@ class SlotButton(discord.ui.Button):
 
 
 
-        role_name=CARRY_ROLES[self.dungeon]
+        try:
 
+            await interaction.user.send(
 
+                "Your carry control panel:",
 
-        role=discord.utils.get(
+                view=HostControlView(
 
-            interaction.guild.roles,
-
-            name=role_name
-
-        )
-
-
-
-
-
-        ping = role.mention if role else ""
-
-
-
-
-
-
-        embed=discord.Embed(
-
-            title="🔥 Deepwoken Carry",
-
-            description=(
-
-                f"Host: {interaction.user.mention}\n\n"
-
-                f"Dungeon: **{self.dungeon}**\n\n"
-
-                "Players:\n"
-
-                +
-
-                "\n".join(
-
-                    [
-
-                    f"{i}. 🟢 Empty"
-
-                    for i in range(1,self.slots+1)
-
-                    ]
+                    carry_id
 
                 )
 
             )
 
-        )
+        except:
 
+            pass
 
-
-
-
-
-
-        await interaction.user.send(
-
-            embed=embed,
-
-            view=CarryView(
-
-                carry_id
-
-            )
-
-        )
 
 
 
@@ -353,11 +320,415 @@ class SlotButton(discord.ui.Button):
 
         await interaction.response.send_message(
 
-            f"✅ Carry created.\n{ping}",
+            f"Carry created: `{carry_id}`",
 
             ephemeral=True
 
         )
+
+
+
+
+
+
+
+
+
+class DungeonSelect(discord.ui.View):
+
+
+    def __init__(self):
+
+        super().__init__(
+
+            timeout=60
+
+        )
+
+
+
+        for dungeon in CARRY_LIMITS:
+
+            self.add_item(
+
+                DungeonButton(dungeon)
+
+            )
+
+
+
+
+
+
+
+
+
+class DungeonButton(discord.ui.Button):
+
+
+    def __init__(self, dungeon):
+
+        super().__init__(
+
+            label=dungeon,
+
+            style=discord.ButtonStyle.primary
+
+        )
+
+        self.dungeon = dungeon
+
+
+
+
+
+
+    async def callback(
+
+        self,
+
+        interaction: discord.Interaction
+
+    ):
+
+
+        required = HOSTER_ROLES[self.dungeon]
+
+
+        role = discord.utils.get(
+
+            interaction.guild.roles,
+
+            name=required
+
+        )
+
+
+
+        if role not in interaction.user.roles:
+
+
+            await interaction.response.send_message(
+
+                f"Need role: {required}",
+
+                ephemeral=True
+
+            )
+
+            return
+
+
+
+
+
+        await interaction.response.send_modal(
+
+            HostModal(
+
+                self.dungeon
+
+            )
+
+        )
+
+
+
+
+
+
+
+
+
+class CarryJoinView(discord.ui.View):
+
+
+    def __init__(self, carry_id):
+
+        super().__init__(
+
+            timeout=None
+
+        )
+
+        self.carry_id = carry_id
+
+
+
+
+
+
+
+    @discord.ui.button(
+
+        label="Join",
+
+        style=discord.ButtonStyle.success
+
+    )
+
+    async def join(
+
+        self,
+
+        interaction: discord.Interaction,
+
+        button
+
+    ):
+
+
+        if await database.is_blacklisted(
+
+            interaction.user.id
+
+        ):
+
+            await interaction.response.send_message(
+
+                "You are blacklisted.",
+
+                ephemeral=True
+
+            )
+
+            return
+
+
+
+
+
+        players = await database.get_players(
+
+            self.carry_id
+
+        )
+
+
+
+        carry = await database.get_carry(
+
+            self.carry_id
+
+        )
+
+
+
+        if len(players) >= carry[4]:
+
+
+            await interaction.response.send_message(
+
+                "Carry full.",
+
+                ephemeral=True
+
+            )
+
+            return
+
+
+
+
+
+        await database.add_player(
+
+            self.carry_id,
+
+            interaction.user.id,
+
+            str(interaction.user)
+
+        )
+
+
+
+        await interaction.response.send_message(
+
+            "Joined.",
+
+            ephemeral=True
+
+        )
+
+
+
+
+
+
+
+
+class HostControlView(discord.ui.View):
+
+
+    def __init__(self, carry_id):
+
+        super().__init__(
+
+            timeout=None
+
+        )
+
+        self.carry_id = carry_id
+
+
+
+
+
+
+    @discord.ui.button(
+
+        label="Start Carry",
+
+        style=discord.ButtonStyle.success
+
+    )
+
+    async def start(
+
+        self,
+
+        interaction,
+
+        button
+
+    ):
+
+
+        await interaction.response.send_message(
+
+            "Starting carry...",
+
+            ephemeral=True
+
+        )
+
+
+
+
+
+
+
+    @discord.ui.button(
+
+        label="Report Incident",
+
+        style=discord.ButtonStyle.danger
+
+    )
+
+    async def report(
+
+        self,
+
+        interaction,
+
+        button
+
+    ):
+
+
+        from cogs.incidents import IncidentModal
+
+
+        await interaction.response.send_modal(
+
+            IncidentModal(
+
+                self.carry_id
+
+            )
+
+        )
+
+
+
+
+
+
+
+    @discord.ui.button(
+
+        label="End Carry",
+
+        style=discord.ButtonStyle.secondary
+
+    )
+
+    async def end(
+
+        self,
+
+        interaction,
+
+        button
+
+    ):
+
+
+        await database.delete_carry(
+
+            self.carry_id
+
+        )
+
+
+        await interaction.response.send_message(
+
+            "Carry ended.",
+
+            ephemeral=True
+
+        )
+
+
+
+
+
+
+
+
+
+class Host(commands.Cog):
+
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+
+
+
+
+
+    @app_commands.command(
+
+        name="host",
+
+        description="Create a carry"
+
+    )
+
+    async def host(
+
+        self,
+
+        interaction
+
+    ):
+
+
+        await interaction.response.send_message(
+
+            "Choose dungeon:",
+
+            view=DungeonSelect(),
+
+            ephemeral=True
+
+        )
+
+
 
 
 
