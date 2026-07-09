@@ -1,7 +1,6 @@
 import discord
 
 from discord.ext import commands
-
 from discord import app_commands
 
 import database
@@ -14,7 +13,6 @@ from config import CHANNELS, HOSTER_ROLES, CARRY_ROLES
 
 class Setup(commands.Cog):
 
-
     def __init__(self, bot):
 
         self.bot = bot
@@ -23,173 +21,128 @@ class Setup(commands.Cog):
 
 
 
-
-
     @app_commands.command(
-
         name="setup",
-
-        description="Setup Deepwoken carry system"
-
+        description="Setup Deepwoken Carry system"
     )
     @app_commands.checks.has_permissions(
-
         administrator=True
-
     )
     async def setup(
-
         self,
-
         interaction: discord.Interaction
-
     ):
-
 
         guild = interaction.guild
 
 
-
         await interaction.response.defer(
-
             ephemeral=True
-
         )
 
 
 
+        # CATEGORY
 
-
-        # ==========================
-        # Category
-        # ==========================
-
-
-        category = discord.utils.get(
-
-            guild.categories,
-
-            name=CHANNELS["category"]
-
+        category = discord.utils.find(
+            lambda c: c.name == CHANNELS["category"],
+            guild.categories
         )
 
 
-        if not category:
-
+        if category is None:
 
             category = await guild.create_category(
-
                 CHANNELS["category"]
-
             )
 
 
 
 
 
+        # CHANNELS
 
-
-        # ==========================
-        # Channels
-        # ==========================
-
-
-        created_channels = {}
-
-
+        created = {}
 
         for key in [
 
             "carry_pings",
-
             "hoster_cmds",
-
             "incident_reports"
 
         ]:
 
-
-            channel_name = CHANNELS[key]
-
+            name = CHANNELS[key]
 
 
-            channel = discord.utils.get(
+            channel = discord.utils.find(
 
-                guild.text_channels,
+                lambda c: c.name == name,
 
-                name=channel_name
+                guild.text_channels
 
             )
 
 
-
-            if not channel:
-
+            if channel is None:
 
                 channel = await guild.create_text_channel(
 
-                    channel_name,
+                    name,
 
                     category=category
 
                 )
 
 
-
-            created_channels[key] = channel
-
+            created[key] = channel
 
 
 
 
 
 
-        # ==========================
-        # Roles
-        # ==========================
+        # ROLES
+
+        roles = {}
 
 
-        roles_to_create = list(
+        all_roles = (
 
-            HOSTER_ROLES.values()
+            list(HOSTER_ROLES.values())
 
-        ) + list(
+            +
 
-            CARRY_ROLES.values()
+            list(CARRY_ROLES.values())
 
         )
 
 
+        for role_name in all_roles:
 
 
+            role = discord.utils.find(
 
-        created_roles = {}
+                lambda r: r.name == role_name,
 
-
-
-        for role_name in roles_to_create:
-
-
-            role = discord.utils.get(
-
-                guild.roles,
-
-                name=role_name
+                guild.roles
 
             )
 
 
-            if not role:
+            if role is None:
 
 
                 role = await guild.create_role(
 
-                    name=role_name
+                    name=role_name,
+
+                    reason="Carry bot setup"
 
                 )
 
 
-            created_roles[role_name] = role
+            roles[role_name] = role
 
 
 
@@ -197,21 +150,21 @@ class Setup(commands.Cog):
 
 
 
-        # ==========================
-        # Permissions
-        # ==========================
+        # PERMISSIONS
 
 
         bot_member = guild.me
 
 
 
-        for channel in created_channels.values():
+        for channel in created.values():
 
 
             await channel.set_permissions(
 
                 guild.default_role,
+
+                view_channel=True,
 
                 send_messages=False
 
@@ -222,9 +175,11 @@ class Setup(commands.Cog):
 
                 bot_member,
 
+                view_channel=True,
+
                 send_messages=True,
 
-                view_channel=True
+                embed_links=True
 
             )
 
@@ -233,65 +188,19 @@ class Setup(commands.Cog):
 
 
 
-        # Hoster commands channel
+        await database.save_settings(
 
-        hoster_channel = created_channels["hoster_cmds"]
+            guild.id,
 
+            category.id,
 
-        await hoster_channel.set_permissions(
+            created["carry_pings"].id,
 
-            guild.default_role,
+            created["hoster_cmds"].id,
 
-            send_messages=False
-
-        )
-
-
-
-
-
-
-
-        # ==========================
-        # Save IDs
-        # ==========================
-
-
-        db = await database.get_db()
-
-
-        await db.execute(
-
-            """
-
-            INSERT OR REPLACE INTO settings
-
-            VALUES (?, ?, ?, ?, ?)
-
-            """,
-
-            (
-
-                guild.id,
-
-                category.id,
-
-                created_channels["carry_pings"].id,
-
-                created_channels["hoster_cmds"].id,
-
-                created_channels["incident_reports"].id
-
-            )
+            created["incident_reports"].id
 
         )
-
-
-        await db.commit()
-
-        await db.close()
-
-
 
 
 
@@ -299,7 +208,7 @@ class Setup(commands.Cog):
 
         await interaction.followup.send(
 
-            "✅ Deepwoken carry system setup complete.",
+            "Setup complete. Channels and roles created.",
 
             ephemeral=True
 

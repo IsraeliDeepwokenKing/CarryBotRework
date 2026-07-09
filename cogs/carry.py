@@ -4,7 +4,10 @@ from discord.ext import commands
 
 import database
 
-from config import VC_PREFIX, CARRY_ROLES
+from config import (
+    VC_PREFIX,
+    MINIMUM_PLAYERS
+)
 
 
 
@@ -43,23 +46,21 @@ class Carry(commands.Cog):
 
         if not carry:
 
-            return False
+            await interaction.response.send_message(
+
+                "Carry does not exist.",
+
+                ephemeral=True
+
+            )
+
+            return
 
 
 
-
-
-        guild = interaction.guild
 
 
         dungeon = carry[3]
-
-
-        host = guild.get_member(
-
-            carry[2]
-
-        )
 
 
         players = await database.get_players(
@@ -72,11 +73,32 @@ class Carry(commands.Cog):
 
 
 
+        if len(players) < MINIMUM_PLAYERS[dungeon]:
 
 
-        # =====================
-        # Create Role
-        # =====================
+            await interaction.response.send_message(
+
+                f"Need {MINIMUM_PLAYERS[dungeon]} players.",
+
+                ephemeral=True
+
+            )
+
+            return
+
+
+
+
+
+
+
+        guild = interaction.guild
+
+
+
+
+
+        # temporary role
 
 
         role = await guild.create_role(
@@ -91,9 +113,9 @@ class Carry(commands.Cog):
 
 
 
-        # =====================
-        # Create VC
-        # =====================
+
+
+        # category
 
 
         category = discord.utils.get(
@@ -119,7 +141,6 @@ class Carry(commands.Cog):
             ),
 
 
-
             role:
 
             discord.PermissionOverwrite(
@@ -138,15 +159,45 @@ class Carry(commands.Cog):
 
 
 
+
+
         voice = await guild.create_voice_channel(
 
-            f"{VC_PREFIX[dungeon]}-{host.name}",
+            f"{VC_PREFIX[dungeon]}-{carry_id}",
 
             category=category,
 
             overwrites=overwrites
 
         )
+
+
+
+
+
+
+
+        # give roles
+
+
+        for player in players:
+
+
+            member = guild.get_member(
+
+                player[0]
+
+            )
+
+
+            if member:
+
+
+                await member.add_roles(
+
+                    role
+
+                )
 
 
 
@@ -170,44 +221,9 @@ class Carry(commands.Cog):
 
 
 
-        # Give role
-
-        for player in players:
+        return voice
 
 
-            member = guild.get_member(
-
-                player[0]
-
-            )
-
-
-            if member:
-
-
-                await member.add_roles(
-
-                    role
-
-                )
-
-
-
-        if host:
-
-            await host.add_roles(
-
-                role
-
-            )
-
-
-
-
-
-
-
-        return True
 
 
 
@@ -243,7 +259,7 @@ async def end_carry(
 
 
 
-    # VC delete
+    # delete voice
 
 
     if carry[7]:
@@ -268,7 +284,9 @@ async def end_carry(
 
 
 
-    # Role delete
+
+
+    # delete role
 
 
     if carry[8]:
@@ -293,11 +311,26 @@ async def end_carry(
 
 
 
+
+
     await database.delete_carry(
 
         carry_id
 
     )
+
+
+
+
+
+
+
+
+
+class Carry(commands.Cog):
+
+
+    pass
 
 
 

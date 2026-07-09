@@ -1,31 +1,26 @@
-# =========================
-# Carry limits
-# =========================
-
 CARRY_LIMITS = {
 
     "Enmity": 12,
-
     "Titus": 10,
-
     "Elder": 16
 
 }
 
 
+MINIMUM_PLAYERS = {
+
+    "Enmity": 5,
+    "Titus": 1,
+    "Elder": 1
+
+}
 
 
-
-# =========================
-# Role names
-# =========================
 
 HOSTER_ROLES = {
 
     "Enmity": "Enmity Hoster",
-
     "Titus": "Titus Hoster",
-
     "Elder": "Elder Hoster"
 
 }
@@ -35,20 +30,12 @@ HOSTER_ROLES = {
 CARRY_ROLES = {
 
     "Enmity": "Enmity Carry",
-
     "Titus": "Titus Carry",
-
     "Elder": "Elder Carry"
 
 }
 
 
-
-
-
-# =========================
-# Channel names
-# =========================
 
 CHANNELS = {
 
@@ -64,45 +51,14 @@ CHANNELS = {
 
 
 
-
-
-# =========================
-# Carry ID
-# =========================
-
 CARRY_ID_LENGTH = 6
 
-
-
-
-
-# =========================
-# Voice logging
-# =========================
-
-# Keep voice activity for 10 minutes
 
 VOICE_LOG_SECONDS = 600
 
 
-
-
-
-# =========================
-# Incident system
-# =========================
-
-# Delete resolved incident after 1 hour
-
 INCIDENT_DELETE_TIME = 3600
 
-
-
-
-
-# =========================
-# Temporary resources
-# =========================
 
 VC_PREFIX = {
 
@@ -114,26 +70,5 @@ VC_PREFIX = {
 
 }
 
-
-
-
-
-ROLE_PREFIX = {
-
-    "Enmity": "Enmity Carry",
-
-    "Titus": "Titus Carry",
-
-    "Elder": "Elder Carry"
-
-}
-
-
-
-
-
-# =========================
-# Database
-# =========================
 
 DATABASE_FILE = "carrybot.db"
