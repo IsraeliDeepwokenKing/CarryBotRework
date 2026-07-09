@@ -1,11 +1,15 @@
-import os
-import asyncio
-
 import discord
+
 from discord.ext import commands
 
 import database
+
+import os
+
+
 from keep_alive import keep_alive
+
+
 
 
 
@@ -15,21 +19,29 @@ TOKEN = os.getenv("TOKEN")
 
 
 
+
+
 class CarryBot(commands.Bot):
+
 
     def __init__(self):
 
         intents = discord.Intents.default()
 
         intents.members = True
+
         intents.message_content = True
-        intents.voice_states = True
 
 
         super().__init__(
+
             command_prefix="!",
+
             intents=intents
+
         )
+
+
 
 
 
@@ -37,67 +49,69 @@ class CarryBot(commands.Bot):
 
     async def setup_hook(self):
 
-        await database.setup_database()
+
+        await database.init_db()
+
 
 
         extensions = [
 
             "cogs.setup",
+
             "cogs.host",
+
             "cogs.carry",
-            "cogs.voice_logs",
+
             "cogs.incidents",
+
             "cogs.blacklist",
-            "cogs.cleanup"
 
         ]
 
 
-        for extension in extensions:
+
+        for ext in extensions:
 
             try:
 
-                await self.load_extension(extension)
+                await self.load_extension(ext)
 
                 print(
-                    f"Loaded: {extension}"
+
+                    f"Loaded {ext}"
+
+                )
+
+            except Exception as e:
+
+                print(
+
+                    f"FAILED {ext}: {e}"
+
                 )
 
 
-            except Exception as error:
-
-                print(
-                    f"Failed loading {extension}: {error}"
-                )
-
-
-
-        synced = await self.tree.sync()
-
-
-        print(
-            f"Synced {len(synced)} slash commands"
-        )
 
 
 
 
+        try:
 
+            synced = await self.tree.sync()
 
+            print(
 
-    async def on_ready(self):
+                f"Synced {len(synced)} commands"
 
-        print("======================")
+            )
 
-        print(
-            f"Logged in as {self.user}"
-        )
+        except Exception as e:
 
-        print(
-            f"Servers: {len(self.guilds)}"
-        )
+            print(
 
-        print("======================")
+                f"Sync error: {e}"
+
+            )
 
 
 
@@ -115,34 +129,10 @@ bot = CarryBot()
 
 
 
-async def main():
-
-    if not TOKEN:
-
-        print(
-            "ERROR: TOKEN environment variable missing"
-        )
-
-        return
-
-
-
-    keep_alive()
-
-
-    await bot.start(
-        TOKEN
-    )
+keep_alive()
 
 
 
 
 
-
-
-
-if __name__ == "__main__":
-
-    asyncio.run(
-        main()
-    )
+bot.run(TOKEN)
