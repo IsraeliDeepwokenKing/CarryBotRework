@@ -16,120 +16,149 @@ async def get_db():
 
 
 
-async def setup_database():
+
+
+async def init_db():
 
     db = await get_db()
 
 
-    await db.executescript("""
 
-    CREATE TABLE IF NOT EXISTS settings (
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
 
-        guild_id INTEGER PRIMARY KEY,
+            guild_id INTEGER PRIMARY KEY,
 
-        category_id INTEGER,
+            category_id INTEGER,
 
-        carry_pings_id INTEGER,
+            carry_ping_id INTEGER,
 
-        hoster_cmds_id INTEGER,
+            hoster_cmd_id INTEGER,
 
-        incident_reports_id INTEGER
+            incident_id INTEGER
 
-    );
+        )
+        """
+    )
 
 
 
 
 
-    CREATE TABLE IF NOT EXISTS carries (
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS carries (
 
-        carry_id TEXT PRIMARY KEY,
+            carry_id TEXT PRIMARY KEY,
 
-        guild_id INTEGER,
+            guild_id INTEGER,
 
-        host_id INTEGER,
+            host_id INTEGER,
 
-        dungeon TEXT,
+            dungeon TEXT,
 
-        slots INTEGER,
+            slots INTEGER,
 
-        rules TEXT,
+            rules TEXT,
 
-        message_id INTEGER,
+            message_id INTEGER,
 
-        voice_id INTEGER,
+            voice_id INTEGER,
 
-        role_id INTEGER,
+            role_id INTEGER,
 
-        active INTEGER DEFAULT 1
+            status TEXT DEFAULT 'WAITING'
 
-    );
+        )
+        """
+    )
 
 
 
 
 
-    CREATE TABLE IF NOT EXISTS carry_players (
 
-        carry_id TEXT,
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS players (
 
-        user_id INTEGER,
+            carry_id TEXT,
 
-        username TEXT,
+            user_id INTEGER,
 
-        joined_at INTEGER
+            username TEXT
 
-    );
+        )
+        """
+    )
 
 
 
 
 
-    CREATE TABLE IF NOT EXISTS voice_logs (
 
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        carry_id TEXT,
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_logs (
 
-        user_id INTEGER,
+            carry_id TEXT,
 
-        action TEXT,
+            user_id INTEGER,
 
-        timestamp INTEGER
+            action TEXT,
 
-    );
+            timestamp INTEGER
 
+        )
+        """
+    )
 
 
 
 
-    CREATE TABLE IF NOT EXISTS blacklist (
 
-        user_id INTEGER PRIMARY KEY,
 
-        reason TEXT,
 
-        moderator_id INTEGER,
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS blacklist (
 
-        created_at INTEGER
+            user_id INTEGER PRIMARY KEY,
 
-    );
+            reason TEXT,
 
+            moderator INTEGER,
 
+            timestamp INTEGER
 
+        )
+        """
+    )
 
 
-    CREATE TABLE IF NOT EXISTS incidents (
 
-        message_id INTEGER PRIMARY KEY,
 
-        channel_id INTEGER,
 
-        delete_time INTEGER
 
-    );
 
-    """)
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS incidents (
+
+            message_id INTEGER PRIMARY KEY,
+
+            channel_id INTEGER,
+
+            delete_time INTEGER
+
+        )
+        """
+    )
+
+
+
 
 
     await db.commit()
@@ -142,9 +171,10 @@ async def setup_database():
 
 
 
-# =========================
+# -------------------------
 # SETTINGS
-# =========================
+# -------------------------
+
 
 
 async def save_settings(
@@ -153,15 +183,17 @@ async def save_settings(
 
     category_id,
 
-    carry_pings_id,
+    carry_ping_id,
 
-    hoster_cmds_id,
+    hoster_cmd_id,
 
-    incident_reports_id
+    incident_id
 
 ):
 
+
     db = await get_db()
+
 
 
     await db.execute(
@@ -170,7 +202,7 @@ async def save_settings(
 
         INSERT OR REPLACE INTO settings
 
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?,?,?,?,?)
 
         """,
 
@@ -180,15 +212,16 @@ async def save_settings(
 
             category_id,
 
-            carry_pings_id,
+            carry_ping_id,
 
-            hoster_cmds_id,
+            hoster_cmd_id,
 
-            incident_reports_id
+            incident_id
 
         )
 
     )
+
 
 
     await db.commit()
@@ -199,9 +232,17 @@ async def save_settings(
 
 
 
-async def get_settings(guild_id):
+
+
+async def get_settings(
+
+    guild_id
+
+):
+
 
     db = await get_db()
+
 
 
     cursor = await db.execute(
@@ -216,18 +257,22 @@ async def get_settings(guild_id):
 
         """,
 
-        (guild_id,)
+        (
+
+            guild_id,
+
+        )
 
     )
 
 
-    result = await cursor.fetchone()
+    data = await cursor.fetchone()
 
 
     await db.close()
 
 
-    return result
+    return data
 
 
 
@@ -235,9 +280,10 @@ async def get_settings(guild_id):
 
 
 
-# =========================
+# -------------------------
 # CARRY
-# =========================
+# -------------------------
+
 
 
 async def create_carry(
@@ -256,7 +302,9 @@ async def create_carry(
 
 ):
 
+
     db = await get_db()
+
 
 
     await db.execute(
@@ -265,7 +313,23 @@ async def create_carry(
 
         INSERT INTO carries
 
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 1)
+        (
+
+        carry_id,
+
+        guild_id,
+
+        host_id,
+
+        dungeon,
+
+        slots,
+
+        rules
+
+        )
+
+        VALUES (?,?,?,?,?,?)
 
         """,
 
@@ -288,6 +352,7 @@ async def create_carry(
     )
 
 
+
     await db.commit()
 
     await db.close()
@@ -298,9 +363,15 @@ async def create_carry(
 
 
 
-async def get_carry(carry_id):
+async def get_carry(
+
+    carry_id
+
+):
+
 
     db = await get_db()
+
 
 
     cursor = await db.execute(
@@ -315,18 +386,23 @@ async def get_carry(carry_id):
 
         """,
 
-        (carry_id,)
+        (
+
+            carry_id,
+
+        )
 
     )
 
 
-    result = await cursor.fetchone()
+    data = await cursor.fetchone()
 
 
     await db.close()
 
 
-    return result
+
+    return data
 
 
 
@@ -342,87 +418,183 @@ async def update_carry_resources(
 
     voice_id=None,
 
-    role_id=None
+    role_id=None,
+
+    status=None
 
 ):
+
 
     db = await get_db()
 
 
+
+    if message_id:
+
+        await db.execute(
+
+            """
+
+            UPDATE carries
+
+            SET message_id=?
+
+            WHERE carry_id=?
+
+            """,
+
+            (
+
+                message_id,
+
+                carry_id
+
+            )
+
+        )
+
+
+
+    if voice_id:
+
+        await db.execute(
+
+            """
+
+            UPDATE carries
+
+            SET voice_id=?
+
+            WHERE carry_id=?
+
+            """,
+
+            (
+
+                voice_id,
+
+                carry_id
+
+            )
+
+        )
+
+
+
+    if role_id:
+
+        await db.execute(
+
+            """
+
+            UPDATE carries
+
+            SET role_id=?
+
+            WHERE carry_id=?
+
+            """,
+
+            (
+
+                role_id,
+
+                carry_id
+
+            )
+
+        )
+
+
+
+    if status:
+
+        await db.execute(
+
+            """
+
+            UPDATE carries
+
+            SET status=?
+
+            WHERE carry_id=?
+
+            """,
+
+            (
+
+                status,
+
+                carry_id
+
+            )
+
+        )
+
+
+
+
+    await db.commit()
+
+    await db.close()
+
+
+
+
+
+
+
+async def delete_carry(
+
+    carry_id
+
+):
+
+
+    db = await get_db()
+
+
+
     await db.execute(
 
-        """
-
-        UPDATE carries
-
-        SET
-
-        message_id = COALESCE(?, message_id),
-
-        voice_id = COALESCE(?, voice_id),
-
-        role_id = COALESCE(?, role_id)
-
-        WHERE carry_id=?
-
-        """,
+        "DELETE FROM players WHERE carry_id=?",
 
         (
 
-            message_id,
-
-            voice_id,
-
-            role_id,
-
-            carry_id
+            carry_id,
 
         )
 
     )
 
 
-    await db.commit()
-
-    await db.close()
-
-
-
-
-
-
-
-async def delete_carry(carry_id):
-
-
-    db = await get_db()
-
-
-    await db.execute(
-
-        "DELETE FROM carry_players WHERE carry_id=?",
-
-        (carry_id,)
-
-    )
-
 
     await db.execute(
 
         "DELETE FROM voice_logs WHERE carry_id=?",
 
-        (carry_id,)
+        (
+
+            carry_id,
+
+        )
 
     )
+
 
 
     await db.execute(
 
         "DELETE FROM carries WHERE carry_id=?",
 
-        (carry_id,)
+        (
+
+            carry_id,
+
+        )
 
     )
+
 
 
     await db.commit()
@@ -435,9 +607,10 @@ async def delete_carry(carry_id):
 
 
 
-# =========================
+# -------------------------
 # PLAYERS
-# =========================
+# -------------------------
+
 
 
 async def add_player(
@@ -450,16 +623,18 @@ async def add_player(
 
 ):
 
+
     db = await get_db()
+
 
 
     await db.execute(
 
         """
 
-        INSERT INTO carry_players
+        INSERT INTO players
 
-        VALUES (?, ?, ?, ?)
+        VALUES (?,?,?)
 
         """,
 
@@ -469,13 +644,12 @@ async def add_player(
 
             user_id,
 
-            username,
-
-            0
+            username
 
         )
 
     )
+
 
 
     await db.commit()
@@ -488,142 +662,15 @@ async def add_player(
 
 
 
-async def remove_player(
+async def get_players(
 
-    carry_id,
-
-    user_id
+    carry_id
 
 ):
 
-    db = await get_db()
-
-
-    await db.execute(
-
-        """
-
-        DELETE FROM carry_players
-
-        WHERE carry_id=? AND user_id=?
-
-        """,
-
-        (
-
-            carry_id,
-
-            user_id
-
-        )
-
-    )
-
-
-    await db.commit()
-
-    await db.close()
-
-
-
-
-
-
-
-async def get_players(carry_id):
 
     db = await get_db()
 
-
-    cursor = await db.execute(
-
-        """
-
-        SELECT user_id, username
-
-        FROM carry_players
-
-        WHERE carry_id=?
-
-        """,
-
-        (carry_id,)
-
-    )
-
-
-    result = await cursor.fetchall()
-
-
-    await db.close()
-
-
-    return result
-
-
-
-
-
-
-
-# =========================
-# VOICE LOGS
-# =========================
-
-
-async def add_voice_log(
-
-    carry_id,
-
-    user_id,
-
-    action,
-
-    timestamp
-
-):
-
-    db = await get_db()
-
-
-    await db.execute(
-
-        """
-
-        INSERT INTO voice_logs
-
-        VALUES (NULL, ?, ?, ?, ?)
-
-        """,
-
-        (
-
-            carry_id,
-
-            user_id,
-
-            action,
-
-            timestamp
-
-        )
-
-    )
-
-
-    await db.commit()
-
-    await db.close()
-
-
-
-
-
-
-
-async def get_voice_logs(carry_id):
-
-    db = await get_db()
 
 
     cursor = await db.execute(
@@ -632,26 +679,29 @@ async def get_voice_logs(carry_id):
 
         SELECT *
 
-        FROM voice_logs
+        FROM players
 
         WHERE carry_id=?
 
-        ORDER BY timestamp ASC
-
         """,
 
-        (carry_id,)
+        (
+
+            carry_id,
+
+        )
 
     )
 
 
-    result = await cursor.fetchall()
+
+    data = await cursor.fetchall()
 
 
     await db.close()
 
 
-    return result
+    return data
 
 
 
@@ -659,39 +709,10 @@ async def get_voice_logs(carry_id):
 
 
 
-async def clean_voice_logs(timestamp):
-
-    db = await get_db()
-
-
-    await db.execute(
-
-        """
-
-        DELETE FROM voice_logs
-
-        WHERE timestamp < ?
-
-        """,
-
-        (timestamp,)
-
-    )
-
-
-    await db.commit()
-
-    await db.close()
-
-
-
-
-
-
-
-# =========================
+# -------------------------
 # BLACKLIST
-# =========================
+# -------------------------
+
 
 
 async def add_blacklist(
@@ -700,13 +721,15 @@ async def add_blacklist(
 
     reason,
 
-    moderator_id,
+    moderator,
 
-    created_at
+    timestamp
 
 ):
 
+
     db = await get_db()
+
 
 
     await db.execute(
@@ -715,7 +738,7 @@ async def add_blacklist(
 
         INSERT OR REPLACE INTO blacklist
 
-        VALUES (?, ?, ?, ?)
+        VALUES (?,?,?,?)
 
         """,
 
@@ -725,15 +748,16 @@ async def add_blacklist(
 
             reason,
 
-            moderator_id,
+            moderator,
 
-            created_at
+            timestamp
 
         )
 
     )
 
 
+
     await db.commit()
 
     await db.close()
@@ -744,24 +768,29 @@ async def add_blacklist(
 
 
 
-async def remove_blacklist(user_id):
+async def remove_blacklist(
+
+    user_id
+
+):
+
 
     db = await get_db()
+
 
 
     await db.execute(
 
-        """
+        "DELETE FROM blacklist WHERE user_id=?",
 
-        DELETE FROM blacklist
+        (
 
-        WHERE user_id=?
+            user_id,
 
-        """,
-
-        (user_id,)
+        )
 
     )
+
 
 
     await db.commit()
@@ -774,9 +803,15 @@ async def remove_blacklist(user_id):
 
 
 
-async def is_blacklisted(user_id):
+async def is_blacklisted(
+
+    user_id
+
+):
+
 
     db = await get_db()
+
 
 
     cursor = await db.execute(
@@ -791,7 +826,11 @@ async def is_blacklisted(user_id):
 
         """,
 
-        (user_id,)
+        (
+
+            user_id,
+
+        )
 
     )
 
@@ -802,55 +841,5 @@ async def is_blacklisted(user_id):
     await db.close()
 
 
+
     return result is not None
-
-
-
-
-
-
-
-# =========================
-# INCIDENTS
-# =========================
-
-
-async def create_incident(
-
-    message_id,
-
-    channel_id,
-
-    delete_time
-
-):
-
-    db = await get_db()
-
-
-    await db.execute(
-
-        """
-
-        INSERT OR REPLACE INTO incidents
-
-        VALUES (?, ?, ?)
-
-        """,
-
-        (
-
-            message_id,
-
-            channel_id,
-
-            delete_time
-
-        )
-
-    )
-
-
-    await db.commit()
-
-    await db.close()

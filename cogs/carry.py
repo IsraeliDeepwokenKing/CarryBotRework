@@ -30,9 +30,7 @@ class Carry(commands.Cog):
 
         self,
 
-        carry_id,
-
-        interaction
+        carry_id
 
     ):
 
@@ -46,21 +44,27 @@ class Carry(commands.Cog):
 
         if not carry:
 
-            await interaction.response.send_message(
-
-                "Carry does not exist.",
-
-                ephemeral=True
-
-            )
-
-            return
+            return False, "Carry not found."
 
 
 
 
 
-        dungeon = carry[3]
+        guild = self.bot.get_guild(
+
+            carry[1]
+
+        )
+
+
+        if guild is None:
+
+            return False, "Guild not found."
+
+
+
+
+
 
 
         players = await database.get_players(
@@ -70,21 +74,22 @@ class Carry(commands.Cog):
         )
 
 
+        dungeon = carry[3]
+
+
+
+
 
 
 
         if len(players) < MINIMUM_PLAYERS[dungeon]:
 
+            return False, (
 
-            await interaction.response.send_message(
-
-                f"Need {MINIMUM_PLAYERS[dungeon]} players.",
-
-                ephemeral=True
+                f"Need {MINIMUM_PLAYERS[dungeon]} players."
 
             )
 
-            return
 
 
 
@@ -92,20 +97,14 @@ class Carry(commands.Cog):
 
 
 
-        guild = interaction.guild
-
-
-
-
-
-        # temporary role
+        # create temporary role
 
 
         role = await guild.create_role(
 
             name=f"{dungeon} Carry {carry_id}",
 
-            reason="Temporary carry role"
+            reason="Temporary carry"
 
         )
 
@@ -115,22 +114,21 @@ class Carry(commands.Cog):
 
 
 
-        # category
+        category = discord.utils.find(
 
+            lambda c: c.name == "Deepwoken Carry",
 
-        category = discord.utils.get(
-
-            guild.categories,
-
-            name="Deepwoken Carry"
+            guild.categories
 
         )
+
 
 
 
 
 
         overwrites = {
+
 
             guild.default_role:
 
@@ -139,6 +137,7 @@ class Carry(commands.Cog):
                 view_channel=False
 
             ),
+
 
 
             role:
@@ -163,7 +162,7 @@ class Carry(commands.Cog):
 
         voice = await guild.create_voice_channel(
 
-            f"{VC_PREFIX[dungeon]}-{carry_id}",
+            name=f"{VC_PREFIX[dungeon]}-{carry_id}",
 
             category=category,
 
@@ -177,7 +176,7 @@ class Carry(commands.Cog):
 
 
 
-        # give roles
+        # give role
 
 
         for player in players:
@@ -185,7 +184,7 @@ class Carry(commands.Cog):
 
             member = guild.get_member(
 
-                player[0]
+                player[1]
 
             )
 
@@ -211,7 +210,9 @@ class Carry(commands.Cog):
 
             voice_id=voice.id,
 
-            role_id=role.id
+            role_id=role.id,
+
+            status="RUNNING"
 
         )
 
@@ -221,10 +222,7 @@ class Carry(commands.Cog):
 
 
 
-        return voice
-
-
-
+        return True, voice
 
 
 
@@ -237,7 +235,7 @@ class Carry(commands.Cog):
 
 async def end_carry(
 
-    guild,
+    bot,
 
     carry_id
 
@@ -253,30 +251,47 @@ async def end_carry(
 
     if not carry:
 
-        return
+        return False
 
 
 
 
 
-    # delete voice
+    guild = bot.get_guild(
+
+        carry[1]
+
+    )
+
+
+    if guild is None:
+
+        return False
+
+
+
+
+
+
+
+    # remove voice
 
 
     if carry[7]:
 
 
-        channel = guild.get_channel(
+        voice = guild.get_channel(
 
             carry[7]
 
         )
 
 
-        if channel:
+        if voice:
 
-            await channel.delete(
+            await voice.delete(
 
-                reason="Carry ended"
+                reason="Carry finished"
 
             )
 
@@ -286,7 +301,7 @@ async def end_carry(
 
 
 
-    # delete role
+    # remove role
 
 
     if carry[8]:
@@ -303,7 +318,7 @@ async def end_carry(
 
             await role.delete(
 
-                reason="Carry ended"
+                reason="Carry finished"
 
             )
 
@@ -320,17 +335,9 @@ async def end_carry(
     )
 
 
+    return True
 
 
-
-
-
-
-
-class Carry(commands.Cog):
-
-
-    pass
 
 
 
